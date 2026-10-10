@@ -1,16 +1,78 @@
 const noteForm = document.querySelector("#note-form");
 const noteInput = document.querySelector("#note-input");
 const noteCategory = document.querySelector("#note-category");
+const searchInput = document.querySelector("#search-input");
 const notesList = document.querySelector("#notes-list");
 const noteCount = document.querySelector("#note-count");
 const errorMessage = document.querySelector("#error-message");
+const clearAllButton = document.querySelector("#clear-all");
 
+const storageKey = "quicknotes-notes";
+const categories = ["Personal", "Work", "Study"];
 let notes = [];
+
+function isNote(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof value.id === "string" &&
+    typeof value.text === "string" &&
+    categories.includes(value.category) &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function loadNotes() {
+  try {
+    const savedNotes = localStorage.getItem(storageKey);
+    if (savedNotes === null) {
+      return;
+    }
+
+    const parsedNotes = JSON.parse(savedNotes);
+    if (!Array.isArray(parsedNotes) || !parsedNotes.every(isNote)) {
+      throw new TypeError("Saved notes have an invalid format.");
+    }
+
+    notes = parsedNotes;
+  } catch (error) {
+    console.error("Unable to load saved notes.", error);
+    errorMessage.textContent =
+      "Saved notes could not be loaded. Check your browser storage.";
+  }
+}
+
+function saveNotes() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(notes));
+  } catch (error) {
+    console.error("Unable to save notes.", error);
+    errorMessage.textContent =
+      "Your notes could not be saved in this browser.";
+  }
+}
 
 function render() {
   notesList.replaceChildren();
 
-  notes.forEach((note) => {
+  const searchWords = searchInput.value
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const visibleNotes = notes.filter((note) => {
+    const noteText = note.text.toLocaleLowerCase();
+    return searchWords.every((word) => noteText.includes(word));
+  });
+
+  if (searchWords.length > 0 && visibleNotes.length === 0) {
+    const emptyMessage = document.createElement("li");
+    emptyMessage.classList.add("empty-state");
+    emptyMessage.textContent = "No notes match your search.";
+    notesList.append(emptyMessage);
+  }
+
+  visibleNotes.forEach((note) => {
     const noteItem = document.createElement("li");
     noteItem.classList.add(
       "note-card",
@@ -79,6 +141,7 @@ noteForm.addEventListener("submit", (event) => {
   });
 
   errorMessage.textContent = "";
+  saveNotes();
   render();
   noteForm.reset();
   noteInput.focus();
@@ -95,7 +158,22 @@ notesList.addEventListener("click", (event) => {
   }
 
   notes = notes.filter((note) => note.id !== deleteButton.dataset.noteId);
+  saveNotes();
   render();
 });
 
+searchInput.addEventListener("input", render);
+
+clearAllButton.addEventListener("click", () => {
+  if (!confirm("Delete all notes?")) {
+    return;
+  }
+
+  notes = [];
+  saveNotes();
+  errorMessage.textContent = "";
+  render();
+});
+
+loadNotes();
 render();
